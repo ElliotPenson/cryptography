@@ -7,6 +7,9 @@ DES.py
 """
 
 import sys
+from cryptography_utilities import (right_pad, left_pad,
+    decimal_to_binary, binary_to_decimal, string_to_binary,
+    file_to_binary, binary_to_file, shift_bits, xor)
 
 S_BOXES = [# S-Box 1
            [[14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7],
@@ -79,47 +82,11 @@ EXPANSION_PERMUTATION = [32, 1, 2, 3, 4, 5, 4, 5, 6, 7, 8, 9,
                          16, 17, 18, 19, 20, 21, 20, 21, 22, 23, 24, 25,
                          24, 25, 26, 27, 28, 29, 28, 29, 30, 31, 32, 1]
 
-def decimal_to_binary(decimal):
-    return format(decimal, 'b')
-
-def binary_to_decimal(binary):
-    return int(binary, 2)
-
-def string_to_binary(string):
-    return ''.join([left_pad(decimal_to_binary(ord(char)), size=8)
-                    for char in string])
-
-def binary_to_string(binary):
-    to_return = ''
-    for place in xrange(0, len(binary), 8):
-        to_return += chr(binary_to_decimal(binary[place:place + 8]))
-    return to_return
-
-def file_to_binary(path):
-    with open(path, 'r') as f:
-        return string_to_binary(f.read())
-
-def binary_to_file(text, path):
-    with open(path, 'w') as f:
-        f.write(binary_to_string(text))
-
 def format_key(key):
     """Convert an alphanumeric key into binary and ensure it's 64bit."""
     binary_representation = string_to_binary(key)
     below_64_bits = binary_representation[:64]
     return right_pad(below_64_bits, 64)
-
-def left_pad(string, size):
-    """Add zeros to the front of a string until a certain length is
-    reached.
-    """
-    return string.zfill(size)
-
-def right_pad(string, size):
-    """Add zeroes to the end of a string until a certain length is
-    reached.
-    """
-    return string.ljust(size, '0')
 
 def make_blocks(plaintext, size=64):
     """Divide a string into a list of substrings. The final string in
@@ -147,22 +114,12 @@ def split_block(blocktext):
     return (blocktext[:len(blocktext) / 2],
             blocktext[len(blocktext) / 2:])
 
-def shift_bits(binary, amount):
-    """Move the characters of the binary string to the left."""
-    return ''.join([binary[(place + amount) % len(binary)]
-                    for place in range(len(binary))])
-
 def apply_s_box(text, s_box):
     assert len(text) == 6
     row = binary_to_decimal(text[0] + text[5])
     column = binary_to_decimal(text[1:5])
     binary_value = decimal_to_binary(s_box[row][column])
     return left_pad(binary_value, size=4)
-
-def xor(binary1, binary2):
-    """XOR two binary strings."""
-    return ''.join(['1' if bit1 != bit2 else '0'
-                    for bit1, bit2 in zip(binary1, binary2)])
 
 def generate_subkeys(key):
     shuffled_key = permute(remove_parity_bits(key),
