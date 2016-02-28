@@ -72,7 +72,7 @@ KEY_PERMUTATION_2 = [14, 17, 11, 24, 1, 5, 3, 28, 15, 6, 21, 10,
                      41, 52, 31, 37, 47, 55, 30, 40, 51, 45, 33, 48,
                      44, 49, 39, 56, 34, 53, 46, 42, 50, 36, 29, 32]
 
-KEY_SHIFTS = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1,]
+KEY_SHIFTS = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
 
 EXPANSION_PERMUTATION = [32, 1, 2, 3, 4, 5, 4, 5, 6, 7, 8, 9,
                          8, 9, 10, 11, 12, 13, 12, 13, 14, 15, 16, 17,
@@ -142,15 +142,10 @@ def permute(text, permutation, zero_based=False):
         permutation = [place - 1 for place in permutation]
     return ''.join([text[place] for place in permutation])
 
-def split_block(blocktext, group_size):
+def split_block(blocktext):
     """The group_size parameter is 8 for plaintext and 7 for key"""
-    left, right = '', ''
-    for index, bit in enumerate(blocktext):
-        if index % (group_size * 2) < group_size:
-            left += bit
-        else:
-            right += bit
-    return (left, right)
+    return (blocktext[:len(blocktext) / 2],
+            blocktext[len(blocktext) / 2:])
 
 def shift_bits(binary, amount):
     """Move the characters of the binary string to the left."""
@@ -172,10 +167,9 @@ def xor(binary1, binary2):
 def generate_subkeys(key):
     shuffled_key = permute(remove_parity_bits(key),
                            KEY_PERMUTATION_1)
-    ci, di = split_block(shuffled_key, 7)
+    ci, di = split_block(shuffled_key)
     subkeys = []
-    for stage, stage_shift in zip(range(16), KEY_SHIFTS):
-        # TODO should the shift be against the initial c_i, d_i?
+    for stage_shift in KEY_SHIFTS:
         ci = shift_bits(ci, stage_shift)
         di = shift_bits(di, stage_shift)
         subkeys.append(permute(ci + di, KEY_PERMUTATION_2))
@@ -193,9 +187,10 @@ def feistel_scheme(text, subkeys):
     final_blocks = []
     for block in make_blocks(text):
         block = permute(block, INITIAL_PERMUTATION)
-        left, right = split_block(block, 8)
+        left, right = split_block(block)
         for key in subkeys:
             right, left = xor(left, feistel_function(right, key)), right
+        #print list(subkeys)
         block = permute(right + left, FINAL_PERMUTATION)
         final_blocks.append(block)
     return final_blocks
@@ -206,7 +201,7 @@ def encrypt(text, key):
 
 def decrypt(text, key):
     """Both text and key should be binary strings."""
-    return feistel_scheme(text, reversed(generate_subkeys(format_key(key))))
+    return feistel_scheme(text, list(reversed(generate_subkeys(format_key(key)))))
 
 def main(args):
     if len(args) != 5 or not args[1] in ['--encrypt', '--decrypt']:
