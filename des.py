@@ -83,7 +83,7 @@ EXPANSION_PERMUTATION = [32, 1, 2, 3, 4, 5, 4, 5, 6, 7, 8, 9,
                          24, 25, 26, 27, 28, 29, 28, 29, 30, 31, 32, 1]
 
 def format_key(key):
-    """Convert an alphanumeric key into binary and ensure it's 64bit."""
+    """Convert a string key into 64 bits."""
     binary_representation = string_to_binary(key)
     below_64_bits = binary_representation[:64]
     return right_pad(below_64_bits, 64)
@@ -97,11 +97,6 @@ def make_blocks(plaintext, size=64):
     blocks[-1] = right_pad(blocks[-1], size)
     return blocks
 
-def remove_parity_bits(string, place=8):
-    return string
-#    return ''.join([bit for index, bit in enumerate(string)
-#                    if not index % place == place - 1])
-
 def permute(text, permutation, zero_based=False):
     """Shuffle a string based on a permutation. The permutation must be
     a list of indexes."""
@@ -110,20 +105,27 @@ def permute(text, permutation, zero_based=False):
     return ''.join([text[place] for place in permutation])
 
 def split_block(blocktext):
-    """The group_size parameter is 8 for plaintext and 7 for key"""
+    """Half a string of text. E.g. 'abcd' -> ('ab', 'cd')."""
     return (blocktext[:len(blocktext) / 2],
             blocktext[len(blocktext) / 2:])
 
-def apply_s_box(text, s_box):
-    assert len(text) == 6
-    row = binary_to_decimal(text[0] + text[5])
-    column = binary_to_decimal(text[1:5])
-    binary_value = decimal_to_binary(s_box[row][column])
-    return left_pad(binary_value, size=4)
+def apply_s_box(six_bits, s_box):
+    """Index into an s-box. Row is determined by the first a last bits,
+    column by the middle four bits.
+    """
+    if len(six_bits) == 6:
+        row = binary_to_decimal(six_bits[0] + six_bits[5])
+        column = binary_to_decimal(six_bits[1:5])
+        binary_value = decimal_to_binary(s_box[row][column])
+        return left_pad(binary_value, size=4)
+    else:
+        raise ValueError("Incorrect number of bits for an s-box application.")
 
 def generate_subkeys(key):
-    shuffled_key = permute(remove_parity_bits(key),
-                           KEY_PERMUTATION_1)
+    """Split a 64-bit key into sixteen 48-bit subkeys - one for each
+    round of the feistel structure.
+    """
+    shuffled_key = permute(key, KEY_PERMUTATION_1)
     ci, di = split_block(shuffled_key)
     subkeys = []
     for stage_shift in KEY_SHIFTS:
@@ -132,8 +134,9 @@ def generate_subkeys(key):
         subkeys.append(permute(ci + di, KEY_PERMUTATION_2))
     return subkeys
 
-def feistel_function(plaintext, key):
-    expanded = permute(plaintext, EXPANSION_PERMUTATION)
+def feistel_function(half_block, key):
+    """Perform confusion and diffusion on a 32-bit binary string."""
+    expanded = permute(half_block, EXPANSION_PERMUTATION)
     xored = xor(expanded, key)
     b_sections = [xored[place:place + 6] for place in xrange(0, 48, 6)]
     c_sections = [apply_s_box(section, S_BOXES[number])
@@ -141,24 +144,27 @@ def feistel_function(plaintext, key):
     return permute(''.join(c_sections), C_PERMUTATION)
 
 def feistel_scheme(text, subkeys):
+    """Run the DES algorithm on a each block of the string input
+    text. The subkeys parameter should be a list of sixteen 48-bit
+    binary strings.
+    """
     final_blocks = []
     for block in make_blocks(text):
         block = permute(block, INITIAL_PERMUTATION)
         left, right = split_block(block)
         for key in subkeys:
             right, left = xor(left, feistel_function(right, key)), right
-        #print list(subkeys)
         block = permute(right + left, FINAL_PERMUTATION)
         final_blocks.append(block)
-    return final_blocks
+    return ''.join(final_blocks)
 
 def encrypt(text, key):
-    """Both text and key should be binary strings."""
-    return feistel_scheme(text, generate_subkeys(format_key(key)))
+    """Generate binary ciphertext from binary plaintext with DES."""
+    return feistel_scheme(text, generate_subkeys(key))
 
 def decrypt(text, key):
-    """Both text and key should be binary strings."""
-    return feistel_scheme(text, list(reversed(generate_subkeys(format_key(key)))))
+    """Reveal binary plaintext from binary ciphertext with DES."""
+    return feistel_scheme(text, list(reversed(generate_subkeys(key))))
 
 def main(args):
     if len(args) != 5 or not args[1] in ['--encrypt', '--decrypt']:
@@ -167,12 +173,12 @@ def main(args):
         return 1
     _, mode, key, input_file, output_file = args
     binary_input = file_to_binary(input_file)
+    binary_key = format_key(key)
     if mode == '--encrypt':
-        ciphertext = ''.join(encrypt(binary_input, key))
-        binary_to_file(ciphertext, output_file)
+        output = encrypt(binary_input, binary_key)
     else: # mode == '--decrypt'
-        plaintext = ''.join(decrypt(binary_input, key))
-        binary_to_file(plaintext, output_file)
+        output = decrypt(binary_input, binary_key)
+    binary_to_file(output, output_file)
 
 if __name__ == '__main__':
     main(sys.argv)
