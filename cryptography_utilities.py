@@ -6,8 +6,6 @@ cryptography_utilities.py
 @author Elliot and Erica
 """
 
-import sys
-
 def decimal_to_binary(decimal):
     """Convert an integer into a binary string. E.g. 5 -> '101'."""
     return format(decimal, 'b')
