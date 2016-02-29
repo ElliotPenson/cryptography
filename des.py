@@ -82,11 +82,25 @@ EXPANSION_PERMUTATION = [32, 1, 2, 3, 4, 5, 4, 5, 6, 7, 8, 9,
                          16, 17, 18, 19, 20, 21, 20, 21, 22, 23, 24, 25,
                          24, 25, 26, 27, 28, 29, 28, 29, 30, 31, 32, 1]
 
+KEY_LENGTH = 56
+
+def add_parity_bit(binary):
+    """Append an even parity bit to the end of a binary string."""
+    parity_bit = '0' if binary.count('1') % 2 == 0 else '1'
+    return binary + parity_bit
+
 def format_key(key):
-    """Convert a string key into 64 bits."""
-    binary_representation = string_to_binary(key)
-    below_64_bits = binary_representation[:64]
-    return right_pad(below_64_bits, 64)
+    """Appropriately convert a string key into 64 bits. Oversized keys
+    are truncated, undersized keys are padded with zeroes. A parity bit
+    is also added to the end of each byte.
+    """
+    binary_key = string_to_binary(key)
+    if len(binary_key) < KEY_LENGTH:
+        sized_key = right_pad(binary_key, KEY_LENGTH)
+    else:
+        sized_key = binary_key[:KEY_LENGTH]
+    return ''.join([add_parity_bit(sized_key[code:code + 7])
+                    for code in range(0, KEY_LENGTH, 7)])
 
 def make_blocks(plaintext, size=64):
     """Divide a string into a list of substrings. The final string in
