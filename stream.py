@@ -40,12 +40,6 @@ def update_register(register, register_fn):
     """Nondestructively advance the bit register."""
     return register[1:] + [register_fn()]
 
-def one_time_pad(bit, register, combiner_fn):
-    """Consolidate the register using the combiner_fn and XOR with a
-    plaintext bit.
-    """
-    return '1' if combiner_fn(register) != bit else '0'
-
 def stream_cipher(binary_text, key, combiner_fn, register_fn):
     """Encrypt or decrypt a binary string of text by combining a
     maintained register with each successive bit of binary_text.
@@ -59,7 +53,7 @@ def stream_cipher(binary_text, key, combiner_fn, register_fn):
     output = ''
     for bit in binary_text:
         register = update_register(register, register_fn)
-        output += one_time_pad(bit, register, combiner_fn)
+        output += '1' if combiner_fn(register) != bit else '0'
     return output
 
 def main(args):
