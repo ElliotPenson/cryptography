@@ -87,8 +87,8 @@ KEY_LENGTH = 64
 BYTE_LENGTH = 8
 
 def set_parity_bit(binary):
-    """Use the binary string's rightmost bit as an odd parity bit."""
-    parity_bit = '1' if binary.count('1') % 2 == 0 else '0'
+    """Use the binary string's rightmost bit as an even parity bit."""
+    parity_bit = '0' if binary[:-1].count('1') % 2 == 0 else '1'
     return binary[:-1] + parity_bit
 
 def format_key(key):
