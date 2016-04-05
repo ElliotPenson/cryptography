@@ -6,6 +6,8 @@ cryptography_utilities.py
 @author Elliot and Erica
 """
 
+BYTE_LENGTH = 8
+
 def decimal_to_binary(decimal):
     """Convert an integer into a binary string. E.g. 5 -> '101'."""
     return format(decimal, 'b')
@@ -76,3 +78,30 @@ def xor(*binaries):
 def binary_and(binary1, binary2):
     return ''.join(['1' if int(bit1) & int(bit2) else '0'
                     for bit1, bit2 in zip(binary1, binary2)])
+
+def pad_plaintext(text, block_size=64):
+    """Make the length of the text evenly divisible by the block size by
+    potentially padding with zeroes. The last byte of the result denotes
+    the number of bytes added.
+    """
+    padding_amount = block_size - (len(text) % block_size)
+    return text + left_pad(decimal_to_binary(padding_amount / BYTE_LENGTH),
+                           padding_amount)
+
+def unpad_plaintext(text):
+    """Remove padding bits. The last byte of the text should indicate
+    the number of bits to get rid of.
+    """
+    padding_amount = binary_to_decimal(text[-BYTE_LENGTH:])
+    return text[:-(padding_amount * BYTE_LENGTH)]
+
+def block_split(text, block_size=64):
+    """Divide a string into a list of substrings.
+    PRECONDITION: text % block_size == 0"""
+    return [text[index:index + block_size]
+            for index in xrange(0, len(text), block_size)]
+
+def rotate(list, places):
+    """Shift the elements in a list. A positive place will move the list
+    to the left, a negative place to the right."""
+    return list[places:] + list[:places]

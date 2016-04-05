@@ -8,6 +8,7 @@ DES.py
 
 import sys
 from cryptography_utilities import (right_pad, left_pad,
+    pad_plaintext, unpad_plaintext, block_split,
     decimal_to_binary, binary_to_decimal, string_to_binary,
     file_to_binary, binary_to_file, shift_bits_left, xor)
 
@@ -103,28 +104,6 @@ def format_key(key):
         sized_key = binary_key[:KEY_LENGTH]
     return ''.join([set_parity_bit(sized_key[code:code + BYTE_LENGTH])
                     for code in range(0, KEY_LENGTH, BYTE_LENGTH)])
-
-def pad_plaintext(text, block_size=64):
-    """Make the length of the text evenly divisible by the block size by
-    potentially padding with zeroes. The last byte of the result denotes
-    the number of bytes added.
-    """
-    padding_amount = block_size - (len(text) % block_size)
-    return text + left_pad(decimal_to_binary(padding_amount / BYTE_LENGTH),
-                           padding_amount)
-
-def unpad_plaintext(text):
-    """Remove padding bits. The last byte of the text should indicate
-    the number of bits to get rid of.
-    """
-    padding_amount = binary_to_decimal(text[-BYTE_LENGTH:])
-    return text[:-(padding_amount * BYTE_LENGTH)]
-
-def block_split(text, block_size=64):
-    """Divide a string into a list of substrings.
-    PRECONDITION: text % block_size == 0"""
-    return [text[index:index + block_size]
-            for index in xrange(0, len(text), block_size)]
 
 def permute(text, permutation, zero_based=False):
     """Shuffle a string based on a permutation. The permutation must be
