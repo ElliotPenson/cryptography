@@ -9,10 +9,8 @@ AES.py
 import sys
 from cryptography_utilities import (right_pad, left_pad,
     decimal_to_binary, binary_to_decimal, string_to_binary,
-    file_to_binary, binary_to_file, shift_bits_left,
-    shift_bits_right, binary_and, xor, binary_to_string)
-
-BYTE_LENGTH = 8
+    file_to_binary, binary_to_file, xor, pad_plaintext,
+    unpad_plaintext, block_split, rotate)
 
 S_BOX = [['0x63', '0x7C', '0x77', '0x7B', '0xF2', '0x6B', '0x6F', '0xC5',
           '0x30', '0x01', '0x67', '0x2B', '0xFE', '0xD7', '0xAB', '0x76'],
@@ -79,6 +77,21 @@ INVERSE_S_BOX = [['0x52', '0x09', '0x6A', '0xD5', '0x30', '0x36', '0xA5', '0x38'
                   '0xC8', '0xEB', '0xBB', '0x3C', '0x83', '0x53', '0x99', '0x61'],
                  ['0x17', '0x2B', '0x04', '0x7E', '0xBA', '0x77', '0xD6', '0x26',
                   '0xE1', '0x69', '0x14', '0x63', '0x55', '0x21', '0x0C', '0x7D']]
+
+COLUMN_MIX = [['00000010', '00000011', '00000001', '00000001'],
+              ['00000001', '00000010', '00000011', '00000001'],
+              ['00000001', '00000001', '00000010', '00000011'],
+              ['00000011', '00000001', '00000001', '00000010']]
+
+INVERSE_COLUMN_MIX = [['00001110', '00001011', '00001101', '00001001'],
+                      ['00001001', '00001110', '00001011', '00001101'],
+                      ['00001101', '00001001', '00001110', '00001011'],
+                      ['00001011', '00001101', '00001001', '00001110']]
+
+NUMBER_OF_ROUNDS = 11
+
+MATRIX_SIZE = 4
+
 def apply_s_box(eight_bits, s_box):
     """Index into an s-box. Row is determined by the first four bits,
     column by the second four bits.
@@ -91,261 +104,159 @@ def apply_s_box(eight_bits, s_box):
     else:
         raise ValueError("Incorrect number of bits for an s-box application.")
 
-def byte_sub_transformation(matrix, s_box=S_BOX):
+def byte_sub(matrix, s_box=S_BOX):
+    """Apply the given s-box to each element in a matrix."""
     return [[apply_s_box(byte, s_box) for byte in row]
             for row in matrix]
 
-def shift_list(list, places):
-    list_length = len(list)
-    return [list[(places + i) % list_length]
-            for i in range(list_length)]
+def shift_rows(matrix):
+    """Move each row to the left by a successively larger offset."""
+    return [rotate(matrix[i], i)
+            for i in xrange(len(matrix))]
 
-def shift_row_transformation(matrix):
-    return [shift_list(matrix[i], i)
-            for i in range(len(matrix))]
+def inverse_shift_rows(matrix):
+    """Move each row back to the right by a successively larger offset."""
+    return [rotate(matrix[i], -i)
+            for i in xrange(len(matrix))]
 
-def inverse_shift_row_transformation(matrix):
-    "TODO make a shift_right"
-    return [shift_list(matrix[i], 4 - i)
-            for i in range(len(matrix))]
-
-def multiply_by_x(binary):
-    something = binary + '0'
-    if something[0] == '1':
-        something = xor(something, '100011011')
-    return something[1:]
-
-def gf_1(binary):
+def times_x(binary, power=1):
+    """Multiply a binary string by X^P in the GF(2^8) finite field."""
+    for _ in xrange(power):
+        binary += '0'
+        if binary[0] == '1':
+            # X^8 overflow
+            binary = xor(binary, '100011011')
+        binary = binary[1:]
     return binary
 
-def gf_x(binary):
-    return multiply_by_x(binary)
+def ff_mult(binary1, binary2):
+    """Multiply two binary strings in the GF(2^8) finite field."""
+    return xor(*[times_x(binary2, power)
+                 for power, bit in reversed(list(enumerate(reversed(binary1))))
+                 if bit == '1'])
 
-def gf_x_1(binary):
-    return xor(multiply_by_x(binary), binary)
+def mix_columns(block_matrix, mix_matrix):
+    """Multiply two matrixes in the GF(2^8) finite field. The first
+    argument should be the the current block state, the right argument
+    a transformation constant (COLUMN_MIX for encryption,
+    INVERSE_COLUMN_MIX for decryption).
+    """
+    return [[xor(*[ff_mult(mix_matrix[row][index],
+                           block_matrix[index][column])
+                   for index in xrange(MATRIX_SIZE)])
+             for column in xrange(MATRIX_SIZE)]
+            for row in xrange(MATRIX_SIZE)]
 
-def gf_x3_1(binary):
-    return xor(multiply_by_x(multiply_by_x(multiply_by_x(binary))),
-               binary)
-
-def gf_x3_x_1(binary):
-    return xor(multiply_by_x(multiply_by_x(multiply_by_x(binary))),
-               multiply_by_x(binary),
-               binary)
-
-def gf_x3_x2_1(binary):
-    return xor(multiply_by_x(multiply_by_x(multiply_by_x(binary))),
-               multiply_by_x(multiply_by_x(binary)),
-               binary)
-
-def gf_x3_x2_x(binary):
-    return xor(multiply_by_x(multiply_by_x(multiply_by_x(binary))),
-               multiply_by_x(multiply_by_x(binary)),
-               multiply_by_x(binary))
-
-COLUMN_MIX = [[gf_x, gf_x_1, gf_1, gf_1],
-              [gf_1, gf_x, gf_x_1, gf_1],
-              [gf_1, gf_1, gf_x, gf_x_1],
-              [gf_x_1, gf_1, gf_1, gf_x]]
-
-INVERSE_COLUMN_MIX = [[gf_x3_x2_x, gf_x3_x_1, gf_x3_x2_1, gf_x3_1],
-                      [gf_x3_1, gf_x3_x2_x, gf_x3_x_1, gf_x3_x2_1],
-                      [gf_x3_x2_1, gf_x3_1, gf_x3_x2_x, gf_x3_x_1],
-                      [gf_x3_x_1, gf_x3_x2_1, gf_x3_1, gf_x3_x2_x]]
-    
-def mix_column_transformation(matrix, column_mix=COLUMN_MIX):
-    to_return = [[None, None, None, None],
-                 [None, None, None, None],
-                 [None, None, None, None],
-                 [None, None, None, None]]
-    # First row
-    to_return[0][0] = xor(column_mix[0][0](matrix[0][0]),
-                          column_mix[0][1](matrix[1][0]),
-                          column_mix[0][2](matrix[2][0]),
-                          column_mix[0][3](matrix[3][0]))
-    to_return[0][1] = xor(column_mix[0][0](matrix[0][1]),
-                          column_mix[0][1](matrix[1][1]),
-                          column_mix[0][2](matrix[2][1]),
-                          column_mix[0][3](matrix[3][1]))
-    to_return[0][2] = xor(column_mix[0][0](matrix[0][2]),
-                          column_mix[0][1](matrix[1][2]),
-                          column_mix[0][2](matrix[2][2]),
-                          column_mix[0][3](matrix[3][2]))
-    to_return[0][3] = xor(column_mix[0][0](matrix[0][3]),
-                          column_mix[0][1](matrix[1][3]),
-                          column_mix[0][2](matrix[2][3]),
-                          column_mix[0][3](matrix[3][3]))
-    # Second row
-    to_return[1][0] = xor(column_mix[1][0](matrix[0][0]),
-                          column_mix[1][1](matrix[1][0]),
-                          column_mix[1][2](matrix[2][0]),
-                          column_mix[1][3](matrix[3][0]))
-    to_return[1][1] = xor(column_mix[1][0](matrix[0][1]),
-                          column_mix[1][1](matrix[1][1]),
-                          column_mix[1][2](matrix[2][1]),
-                          column_mix[1][3](matrix[3][1]))
-    to_return[1][2] = xor(column_mix[1][0](matrix[0][2]),
-                          column_mix[1][1](matrix[1][2]),
-                          column_mix[1][2](matrix[2][2]),
-                          column_mix[1][3](matrix[3][2]))
-    to_return[1][3] = xor(column_mix[1][0](matrix[0][3]),
-                          column_mix[1][1](matrix[1][3]),
-                          column_mix[1][2](matrix[2][3]),
-                          column_mix[1][3](matrix[3][3]))
-    # Third row
-    to_return[2][0] = xor(column_mix[2][0](matrix[0][0]),
-                          column_mix[2][1](matrix[1][0]),
-                          column_mix[2][2](matrix[2][0]),
-                          column_mix[2][3](matrix[3][0]))
-    to_return[2][1] = xor(column_mix[2][0](matrix[0][1]),
-                          column_mix[2][1](matrix[1][1]),
-                          column_mix[2][2](matrix[2][1]),
-                          column_mix[2][3](matrix[3][1]))
-    to_return[2][2] = xor(column_mix[2][0](matrix[0][2]),
-                          column_mix[2][1](matrix[1][2]),
-                          column_mix[2][2](matrix[2][2]),
-                          column_mix[2][3](matrix[3][2]))
-    to_return[2][3] = xor(column_mix[2][0](matrix[0][3]),
-                          column_mix[2][1](matrix[1][3]),
-                          column_mix[2][2](matrix[2][3]),
-                          column_mix[2][3](matrix[3][3]))
-    # Fourth row
-    to_return[3][0] = xor(column_mix[3][0](matrix[0][0]),
-                          column_mix[3][1](matrix[1][0]),
-                          column_mix[3][2](matrix[2][0]),
-                          column_mix[3][3](matrix[3][0]))
-    to_return[3][1] = xor(column_mix[3][0](matrix[0][1]),
-                          column_mix[3][1](matrix[1][1]),
-                          column_mix[3][2](matrix[2][1]),
-                          column_mix[3][3](matrix[3][1]))
-    to_return[3][2] = xor(column_mix[3][0](matrix[0][2]),
-                          column_mix[3][1](matrix[1][2]),
-                          column_mix[3][2](matrix[2][2]),
-                          column_mix[3][3](matrix[3][2]))
-    to_return[3][3] = xor(column_mix[3][0](matrix[0][3]),
-                          column_mix[3][1](matrix[1][3]),
-                          column_mix[3][2](matrix[2][3]),
-                          column_mix[3][3](matrix[3][3]))
-    return to_return
-
-def add_round_key(matrix1, matrix2):
-    "XOR two matrices"
+def add_round_key(block_matrix, key_matrix):
+    """XOR two matrixes to produce a single matrix of the same size."""
     return [[xor(element1, element2)
              for element1, element2 in zip(row1, row2)]
-            for row1, row2 in zip(matrix1, matrix2)]
+            for row1, row2 in zip(block_matrix, key_matrix)]
 
 def binary_to_matrix(binary):
+    """Divide a 128 bit binary string into a 4x4 matrix."""
     return [[binary[index:index + 8]
-             for index in range(group, len(binary), 32)]
+             for index in xrange(group, len(binary), 32)]
             for group in [0, 8, 16, 24]]
 
 def matrix_to_binary(matrix):
+    """Combine a 4x4 matrix of bytes into a single binary string."""
     return ''.join([matrix[column][row]
-                    for row in range(4)
-                    for column in range(4)])
+                    for row in xrange(MATRIX_SIZE)
+                    for column in xrange(MATRIX_SIZE)])
 
 def round_constant(column_number):
-    return reduce(lambda acc, _: multiply_by_x(acc),
-                  range((column_number - 4) / 4), '00000010')
+    """The function r(i) = 00000010^{(i - 4)/4} in the GF(2^8) finite
+    field.
+    """
+    return reduce(lambda acc, _: times_x(acc),
+                  xrange((column_number - 4) / 4),
+                  '00000010')
 
-def subkey_transformation(column, column_number):
-    shifted = shift_list(column, 1)
+def transform_subkey(column, column_number):
+    """Obfuscate a key column of length four."""
+    shifted = rotate(column, 1)
     s_boxed = [apply_s_box(byte, S_BOX) for byte in shifted]
     return ([xor(s_boxed[0], round_constant(column_number))] +
             s_boxed[1:])
 
-def rotate_matrix(matrix, size=4):
-    return [[matrix[row][column] for row in range(size)]
-            for column in range(size)]
+def rotate_matrix(matrix, size=MATRIX_SIZE):
+    """Switch the rows and columns of a matrix by rotating left."""
+    return [[matrix[row][column] for row in xrange(size)]
+            for column in xrange(size)]
 
 def key_schedule(key):
-    "Return a list of eleven subkeys."
+    """Evaluate to a list of of eleven subkey matrixes."""
     matrix = binary_to_matrix(key)
-    w = [[matrix[column][row] for row in range(4)] for column in range(4)]
-    
+    key_columns = [[matrix[column][row]
+                    for row in xrange(MATRIX_SIZE)]
+                   for column in xrange(MATRIX_SIZE)]
+
     def xor_columns(column1, column2):
         return [xor(element1, element2)
                 for element1, element2
                 in zip(column1, column2)]
-    
-    for column_number in range(4, 44):
+
+    number_of_columns = MATRIX_SIZE * NUMBER_OF_ROUNDS
+    for column_number in xrange(MATRIX_SIZE, number_of_columns):
         if column_number % 4 == 0:
-            w.append(xor_columns(w[column_number - 4],
-                                 subkey_transformation(w[column_number - 1],
-                                                        column_number)))
+            next_column = xor_columns(key_columns[column_number - 4],
+                                      transform_subkey(key_columns[column_number - 1],
+                                                       column_number))
         else:
-            w.append(xor_columns(w[column_number - 4], w[column_number - 1]))
+            next_column = xor_columns(key_columns[column_number - 4],
+                                      key_columns[column_number - 1])
+        key_columns.append(next_column)
 
-    return [rotate_matrix(w[index:index + 4])
-            for index in range(0, 44, 4)]
-
-def pad_plaintext(text, block_size=64):
-    """Make the length of the text evenly divisible by the block size by
-    potentially padding with zeroes. The last byte of the result denotes
-    the number of bytes added.
-    """
-    padding_amount = block_size - (len(text) % block_size)
-    return text + left_pad(decimal_to_binary(padding_amount / BYTE_LENGTH),
-                           padding_amount)
-
-def unpad_plaintext(text):
-    """Remove padding bits. The last byte of the text should indicate
-    the number of bits to get rid of.
-    """
-    padding_amount = binary_to_decimal(text[-BYTE_LENGTH:])
-    return text[:-(padding_amount * BYTE_LENGTH)]
-
-def block_split(text, block_size=64):
-    """Divide a string into a list of substrings.
-    PRECONDITION: text % block_size == 0"""
-    return [text[index:index + block_size]
-            for index in xrange(0, len(text), block_size)]
-
-def encrypt(binary_plaintext, binary_key):
-    padded_plaintext = pad_plaintext(binary_plaintext, 128)
-    subkeys = key_schedule(binary_key)
-    final_blocks = []
-    for block in block_split(padded_plaintext, 128):
-        matrix = binary_to_matrix(block)
-        matrix = add_round_key(matrix, subkeys[0])
-        for round in range(1, 10):
-            matrix = byte_sub_transformation(matrix)
-            matrix = shift_row_transformation(matrix)
-            matrix = mix_column_transformation(matrix)
-            matrix = add_round_key(matrix, subkeys[round])
-        matrix = byte_sub_transformation(matrix)
-        matrix = shift_row_transformation(matrix)
-        matrix = add_round_key(matrix, subkeys[-1])
-        final_blocks.append(matrix_to_binary(matrix))
-    return ''.join(final_blocks)
-
-def decrypt(binary_ciphertext, binary_key):
-    subkeys = list(reversed(key_schedule(binary_key)))
-    final_blocks = []
-    for block in block_split(binary_ciphertext, 128):
-        matrix = binary_to_matrix(block)
-        matrix = add_round_key(matrix, subkeys[0])
-        matrix = inverse_shift_row_transformation(matrix)
-        matrix = byte_sub_transformation(matrix, INVERSE_S_BOX)
-        for round in range(1, 10):
-            matrix = add_round_key(matrix, subkeys[round])
-            matrix = mix_column_transformation(matrix, INVERSE_COLUMN_MIX)
-            matrix = inverse_shift_row_transformation(matrix)
-            matrix = byte_sub_transformation(matrix, INVERSE_S_BOX)
-        matrix = add_round_key(matrix, subkeys[-1])
-        final_blocks.append(matrix_to_binary(matrix))
-    return unpad_plaintext(''.join(final_blocks))
+    return [rotate_matrix(key_columns[index:index + MATRIX_SIZE])
+            for index in xrange(0, number_of_columns, MATRIX_SIZE)]
 
 def format_key(key, key_length=128):
-    """Appropriately convert a string key into 64 bits. Oversized keys
-    are truncated, undersized keys are padded with zeroes. A parity bit
-    is also added to the end of each byte.
+    """Appropriately convert a string key into a certain bit length.
+    Oversized keys are truncated, undersized keys are padded with zeroes.
     """
     binary_key = string_to_binary(key)
     if len(binary_key) < key_length:
         return right_pad(binary_key, key_length)
     else:
         return binary_key[:key_length]
+
+def encrypt(binary_plaintext, binary_key):
+    """Generate binary ciphertext from binary plaintext with AES."""
+    padded_plaintext = pad_plaintext(binary_plaintext, 128)
+    subkeys = key_schedule(binary_key)
+    final_blocks = []
+    for block in block_split(padded_plaintext, 128):
+        block_matrix = binary_to_matrix(block)
+        block_matrix = add_round_key(block_matrix, subkeys[0])
+        for round in xrange(1, 10):
+            block_matrix = byte_sub(block_matrix)
+            block_matrix = shift_rows(block_matrix)
+            block_matrix = mix_columns(block_matrix, COLUMN_MIX)
+            block_matrix = add_round_key(block_matrix, subkeys[round])
+        block_matrix = byte_sub(block_matrix)
+        block_matrix = shift_rows(block_matrix)
+        block_matrix = add_round_key(block_matrix, subkeys[-1])
+        final_blocks.append(matrix_to_binary(block_matrix))
+    return ''.join(final_blocks)
+
+def decrypt(binary_ciphertext, binary_key):
+    """Reveal binary plaintext from binary ciphertext with AES."""
+    subkeys = list(reversed(key_schedule(binary_key)))
+    final_blocks = []
+    for block in block_split(binary_ciphertext, 128):
+        block_matrix = binary_to_matrix(block)
+        block_matrix = add_round_key(block_matrix, subkeys[0])
+        block_matrix = inverse_shift_rows(block_matrix)
+        block_matrix = byte_sub(block_matrix, INVERSE_S_BOX)
+        for round in xrange(1, NUMBER_OF_ROUNDS - 1):
+            block_matrix = add_round_key(block_matrix, subkeys[round])
+            block_matrix = mix_columns(block_matrix, INVERSE_COLUMN_MIX)
+            block_matrix = inverse_shift_rows(block_matrix)
+            block_matrix = byte_sub(block_matrix, INVERSE_S_BOX)
+        block_matrix = add_round_key(block_matrix, subkeys[-1])
+        final_blocks.append(matrix_to_binary(block_matrix))
+    return unpad_plaintext(''.join(final_blocks))
 
 def main(args):
     if len(args) != 5 or not args[1] in ['--encrypt', '--decrypt']:
