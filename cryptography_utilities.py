@@ -42,14 +42,37 @@ def right_pad(string, size):
     """Add zeros to the end of a string to reach a certain length."""
     return string.ljust(size, '0')
 
-def shift_bits(binary, amount):
+def wrap_bits_left(binary, amount):
     """Move the characters of the binary string to the left. Bits will
     be wrapped. E.g. shift_bits('1011', 1) -> '0111'.
     """
     return ''.join([binary[(place + amount) % len(binary)]
                     for place in range(len(binary))])
 
-def xor(binary1, binary2):
+def wrap_bits_right(binary, amount):
+    """Move the characters of the binary string to the left. Bits will
+    be wrapped. E.g. shift_bits('1011', 1) -> '0111'.
+    """
+    return ''.join([binary[(place - amount) % len(binary)]
+                    for place in range(len(binary))])
+
+def shift_bits_left(binary, amount):
+    return right_pad(binary[amount:], len(binary))
+
+def shift_bits_right(binary, amount):
+    sign_bit = binary[0]
+    return (sign_bit * amount) + binary[:-amount]
+
+def xor(*binaries):
     """Perform an XOR with the bits of two binary strings."""
-    return ''.join(['1' if bit1 != bit2 else '0'
+    def single_bit_xor(bit1, bit2):
+        return '1' if int(bit1) != int(bit2) else '0'
+    final_length = min(map(len, binaries))
+    return ''.join([reduce(single_bit_xor,
+                           map(lambda binary: binary[index],
+                                   binaries))
+                    for index in range(final_length)])
+
+def binary_and(binary1, binary2):
+    return ''.join(['1' if int(bit1) & int(bit2) else '0'
                     for bit1, bit2 in zip(binary1, binary2)])
