@@ -9,7 +9,7 @@ DES.py
 import sys
 from cryptography_utilities import (right_pad, left_pad,
     decimal_to_binary, binary_to_decimal, string_to_binary,
-    file_to_binary, binary_to_file, shift_bits, xor)
+    file_to_binary, binary_to_file, shift_bits_left, xor)
 
 S_BOXES = [# S-Box 1
            [[14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7],
@@ -158,8 +158,8 @@ def generate_subkeys(key):
     ci, di = half_string(shuffled_key)
     subkeys = []
     for stage_shift in KEY_SHIFTS:
-        ci = shift_bits(ci, stage_shift)
-        di = shift_bits(di, stage_shift)
+        ci = shift_bits_left(ci, stage_shift)
+        di = shift_bits_left(di, stage_shift)
         subkeys.append(permute(ci + di, KEY_PERMUTATION_2))
     return subkeys
 
