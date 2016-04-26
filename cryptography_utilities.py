@@ -59,25 +59,54 @@ def wrap_bits_right(binary, amount):
                     for place in range(len(binary))])
 
 def shift_bits_left(binary, amount):
+    """Add a specific number of zeroes to the end of a binary string."""
     return right_pad(binary[amount:], len(binary))
 
 def shift_bits_right(binary, amount):
+    """Move the bits of a binary string to the right while maintaining
+    the sign bit on the left.
+    """
     sign_bit = binary[0]
     return (sign_bit * amount) + binary[:-amount]
 
-def xor(*binaries):
-    """Perform an XOR with the bits of two binary strings."""
-    def single_bit_xor(bit1, bit2):
-        return '1' if int(bit1) != int(bit2) else '0'
+def bitwise_operation(operation, binaries):
+    """Generally apply a function to a list of binary strings. The
+    operation should take two bit characters as input and output a
+    single bit character.
+    """
     final_length = min(map(len, binaries))
-    return ''.join([reduce(single_bit_xor,
-                           map(lambda binary: binary[index],
-                                   binaries))
-                    for index in range(final_length)])
+    return ''.join(reduce(operation,
+                          map(lambda binary: binary[index],
+                                  binaries))
+                   for index in range(final_length))
 
-def binary_and(binary1, binary2):
-    return ''.join(['1' if int(bit1) & int(bit2) else '0'
-                    for bit1, bit2 in zip(binary1, binary2)])
+def bitwise_xor(*binaries):
+    """Perform an XOR with the bits of any number of binary strings. The
+    output's final length is equal to the shortest binary string.
+    """
+    def bit_xor(bit1, bit2):
+        return '1' if int(bit1) != int(bit2) else '0'
+    return bitwise_operation(bit_xor, binaries)
+
+def bitwise_and(*binaries):
+    """Perform an AND with the bits of any number of binary strings. The
+    output's final length is equal to the shortest binary string.
+    """
+    def bit_and(bit1, bit2):
+        return '1' if int(bit1) & int(bit2) else '0'
+    return bitwise_operation(bit_and, binaries)
+
+def bitwise_or(*binaries):
+    """Perform an OR with the bits of any number of binary strings. The
+    output's final length is equal to the shortest binary string.
+    """
+    def bit_or(bit1, bit2):
+        return '1' if int(bit1) | int(bit2) else '0'
+    return bitwise_operation(bit_or, binaries)
+
+def bitwise_not(binary):
+    """Perform a unary NOT operation on the bits of a binary string."""
+    return ''.join('1' if bit == '0' else '0' for bit in binary)
 
 def pad_plaintext(text, block_size=64):
     """Make the length of the text evenly divisible by the block size by
