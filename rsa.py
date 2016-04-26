@@ -15,8 +15,9 @@ from cryptography_utilities import (block_split, decimal_to_binary,
 MODULUS_BITS = 16
 
 def key_generation():
-    """Return a tuple of (prime1, prime2, modulus, public_key, private_key).
-    the size of the prime numbers is determined by the PRIME_BITS global.
+    """Return a tuple of (modulus, public_key, private_key). The size of
+    modulus (and associated primes) is determined by the MODULUS_BITS
+    global.
     """
     prime1 = random_prime(MODULUS_BITS / 2)
     prime2 = random_prime(MODULUS_BITS / 2)
