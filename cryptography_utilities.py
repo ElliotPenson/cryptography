@@ -6,6 +6,8 @@ cryptography_utilities.py
 @author Elliot and Erica
 """
 
+import random
+
 BYTE_LENGTH = 8
 
 def decimal_to_binary(decimal):
@@ -134,3 +136,109 @@ def rotate(list, places):
     """Shift the elements in a list. A positive place will move the list
     to the left, a negative place to the right."""
     return list[places:] + list[:places]
+
+def fermat_test(n):
+    """Statistically test the primality of a number using the Fermat
+    algorithm.
+    """
+    return (2**(n - 1) % n) == 1
+
+def miller_rabin_test(n):
+    """Statistically test the primality of a number using the Miller–Rabin
+    algorithm.
+    """
+    k, m = 0, n - 1
+    while True:
+        if m % 2 != 0:
+            break
+        else:
+            k += 1
+            m /= 2
+
+    b = 2**m % n
+
+    if (b - n) == -1 or b == 1:
+        return True
+
+    b = b**2 % n
+    if (b - n) == -1:
+        return True
+
+    for _ in range(2, k):
+        b = b**2 % n
+        if (b - n) == -1:
+            return True
+        if b == 1:
+            return False
+    return False
+
+def primep(n):
+    """Combine both the Fermat and Miller-Rabin primality tests into a
+    single function. The predicate should indicate primality with a high
+    likelihood of success.
+    """
+    return fermat_test(n) and miller_rabin_test(n)
+
+def random_number(bits):
+    """Generate a random integer that will cleanly fit in a number of bits."""
+    max, min = 2**bits - 1, 2**(bits - 1)
+    return random.randint(min, max)
+
+def random_prime(bits):
+    """Generate a random prime that will cleanly fit in a number of bits."""
+    while True:
+        n = random_number(bits)
+        if n % 2 == 0 or n % 3 == 0:
+            continue
+        if primep(n):
+            return n
+
+def coprimep(x, y):
+    return gcd(x, y) == 1
+
+def gcd(a, b):
+    """Greatest common divisor of x and y computed with the Euclidean
+    algorithm.
+    """
+    return gcd(b, a % b) if b else a
+
+def extended_gcd(a, b):
+    """Extended Euclidean algorithm. Provides a tuple of (g, x, y)
+    from ax + by = gcd(a, b). Function taken from Wikibooks.
+    """
+    if a == 0:
+        return (b, 0, 1)
+    else:
+        g, y, x = extended_gcd(b % a, a)
+        return (g, x - (b // a) * y, y)
+
+def modular_inverse(x, modulus):
+    """Compute x^-1 (mod modulus)."""
+    return extended_gcd(x, modulus)[1]
+
+def modular_sqrt(x, modulus):
+    """Compute sqrt(x) (mod modulus). The modulus must be a prime
+    number.
+    """
+    potential_sqrt = pow(x, ((modulus + 1) / 4), modulus)
+    if (potential_sqrt**2 % modulus) == (x % modulus):
+        return int(potential_sqrt)
+    else:
+        raise AssertionError('Composite modulus')
+
+def random_relative_prime(prime, bits):
+    """Find a number relatively prime (gcd of 1) number randomly."""
+    max, min = 2**bits - 1, 2**(bits - 1)
+    while True:
+        random_int = random.randint(min, max)
+        if gcd(random_int, prime) == 1:
+            return random_int
+
+def group_exponentiation(base, power, n):
+    """Raise a number to a given power in the GF(2^8) finite field."""
+    bits = decimal_to_binary(power)
+    result = 1
+    for bit_index, bit in zip(range(len(bits) - 1, -1, -1), bits):
+        if bit == '1':
+            result *= base**(2**bit_index) % n
+    return result % n
