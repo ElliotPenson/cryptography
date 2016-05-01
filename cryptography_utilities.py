@@ -18,6 +18,12 @@ def binary_to_decimal(binary):
     """Convert a binary string into an integer. E.g. '101' -> 5."""
     return int(binary, 2)
 
+def hex_to_binary(hex):
+    """Convert a hexadecimal string into a binary string. E.g. 'A1'
+    -> '10100001'.
+    """
+    return decimal_to_binary(int(hex, 16))
+
 def string_to_binary(string):
     """Coerce a string of text into a binary string."""
     return ''.join([left_pad(decimal_to_binary(ord(char)), size=8)
