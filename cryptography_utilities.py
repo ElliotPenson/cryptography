@@ -150,7 +150,7 @@ def fermat_test(n):
     return (2**(n - 1) % n) == 1
 
 def miller_rabin_test(n):
-    """Statistically test the primality of a number using the Miller–Rabin
+    """Statistically test the primality of a number using the Miller-Rabin
     algorithm.
     """
     k, m = 0, n - 1
