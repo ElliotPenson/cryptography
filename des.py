@@ -10,7 +10,8 @@ import sys
 from cryptography_utilities import (right_pad, left_pad,
     pad_plaintext, unpad_plaintext, block_split,
     decimal_to_binary, binary_to_decimal, string_to_binary,
-    file_to_binary, binary_to_file, shift_bits_left, xor)
+    file_to_binary, binary_to_file, shift_bits_left,
+    bitwise_xor)
 
 S_BOXES = [# S-Box 1
            [[14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7],
@@ -145,7 +146,7 @@ def generate_subkeys(key):
 def feistel_function(half_block, key):
     """Perform confusion and diffusion on a 32-bit binary string."""
     expanded = permute(half_block, EXPANSION_PERMUTATION)
-    xored = xor(expanded, key)
+    xored = bitwise_xor(expanded, key)
     b_sections = [xored[place:place + 6] for place in xrange(0, 48, 6)]
     c_sections = [apply_s_box(section, S_BOXES[number])
                   for number, section in enumerate(b_sections)]
@@ -161,7 +162,7 @@ def feistel_scheme(binary_text, subkeys):
         block = permute(block, INITIAL_PERMUTATION)
         left, right = half_string(block)
         for key in subkeys:
-            right, left = xor(left, feistel_function(right, key)), right
+            right, left = bitwise_xor(left, feistel_function(right, key)), right
         block = permute(right + left, FINAL_PERMUTATION)
         final_blocks.append(block)
     return ''.join(final_blocks)

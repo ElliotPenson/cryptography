@@ -9,7 +9,7 @@ AES.py
 import sys
 from cryptography_utilities import (right_pad, left_pad,
     decimal_to_binary, binary_to_decimal, string_to_binary,
-    file_to_binary, binary_to_file, xor, pad_plaintext,
+    file_to_binary, binary_to_file, bitwise_xor, pad_plaintext,
     unpad_plaintext, block_split, rotate)
 
 S_BOX = [['0x63', '0x7C', '0x77', '0x7B', '0xF2', '0x6B', '0x6F', '0xC5',
@@ -125,15 +125,15 @@ def times_x(binary, power=1):
         binary += '0'
         if binary[0] == '1':
             # X^8 overflow
-            binary = xor(binary, '100011011')
+            binary = bitwise_xor(binary, '100011011')
         binary = binary[1:]
     return binary
 
 def ff_mult(binary1, binary2):
     """Multiply two binary strings in the GF(2^8) finite field."""
-    return xor(*[times_x(binary2, power)
-                 for power, bit in reversed(list(enumerate(reversed(binary1))))
-                 if bit == '1'])
+    return bitwise_xor(*[times_x(binary2, power)
+                       for power, bit in reversed(list(enumerate(reversed(binary1))))
+                       if bit == '1'])
 
 def mix_columns(block_matrix, mix_matrix):
     """Multiply two matrixes in the GF(2^8) finite field. The first
@@ -141,15 +141,15 @@ def mix_columns(block_matrix, mix_matrix):
     a transformation constant (COLUMN_MIX for encryption,
     INVERSE_COLUMN_MIX for decryption).
     """
-    return [[xor(*[ff_mult(mix_matrix[row][index],
-                           block_matrix[index][column])
-                   for index in xrange(MATRIX_SIZE)])
+    return [[bitwise_xor(*[ff_mult(mix_matrix[row][index],
+                                   block_matrix[index][column])
+                           for index in xrange(MATRIX_SIZE)])
              for column in xrange(MATRIX_SIZE)]
             for row in xrange(MATRIX_SIZE)]
 
 def add_round_key(block_matrix, key_matrix):
     """XOR two matrixes to produce a single matrix of the same size."""
-    return [[xor(element1, element2)
+    return [[bitwise_xor(element1, element2)
              for element1, element2 in zip(row1, row2)]
             for row1, row2 in zip(block_matrix, key_matrix)]
 
@@ -177,7 +177,7 @@ def transform_subkey(column, column_number):
     """Obfuscate a key column of length four."""
     shifted = rotate(column, 1)
     s_boxed = [apply_s_box(byte, S_BOX) for byte in shifted]
-    return ([xor(s_boxed[0], round_constant(column_number))] +
+    return ([bitwise_xor(s_boxed[0], round_constant(column_number))] +
             s_boxed[1:])
 
 def rotate_matrix(matrix, size=MATRIX_SIZE):
@@ -193,7 +193,7 @@ def key_schedule(key):
                    for column in xrange(MATRIX_SIZE)]
 
     def xor_columns(column1, column2):
-        return [xor(element1, element2)
+        return [bitwise_xor(element1, element2)
                 for element1, element2
                 in zip(column1, column2)]
 
