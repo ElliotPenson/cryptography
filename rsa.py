@@ -7,10 +7,10 @@ RSA.py
 """
 
 import random
+
 from cryptography_utilities import (block_split, decimal_to_binary,
-    binary_to_decimal, gcd, extended_gcd, random_prime, left_pad,
-    pad_plaintext, unpad_plaintext, random_relative_prime,
-    group_exponentiation)
+    binary_to_decimal, extended_gcd, random_prime, left_pad,
+    pad_plaintext, unpad_plaintext, random_relative_prime)
 
 MODULUS_BITS = 16
 
